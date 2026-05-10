@@ -237,7 +237,52 @@
     text-transform: uppercase;
     color: var(--muted);
   }
-  .schedule-actions { display: flex; gap: 8px; }
+  .schedule-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .schedule-actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .schedule-actions button:disabled:hover {
+    background: transparent;
+    color: var(--muted);
+    border-color: var(--line);
+  }
+  .preset-select {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    padding: 8px 28px 8px 12px;
+    cursor: pointer;
+    border-radius: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+                      linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 14px) center, calc(100% - 9px) center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    transition: all 0.2s ease;
+    max-width: 160px;
+    text-overflow: ellipsis;
+  }
+  .preset-select:hover {
+    color: var(--ink);
+    border-color: var(--ink);
+  }
+  .preset-select option {
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .action-divider {
+    width: 1px;
+    height: 18px;
+    background: var(--line);
+    margin: 0 4px;
+  }
 
   .grid-wrap { overflow-x: auto; padding-bottom: 8px; }
   .grid-inner { position: relative; }
@@ -423,6 +468,12 @@
       <div class="schedule-header">
         <span class="schedule-title">Schedule</span>
         <div class="schedule-actions">
+          <select class="preset-select" id="presetSelect" aria-label="Load preset">
+            <option value="">Presets…</option>
+          </select>
+          <button class="ghost" id="savePreset" title="Save current as preset">Save</button>
+          <button class="ghost" id="deletePreset" title="Delete selected preset" disabled>Delete</button>
+          <span class="action-divider"></span>
           <button class="ghost" id="addCol">+ Slot</button>
           <button class="ghost" id="removeCol">− Slot</button>
           <button class="ghost" id="clearGrid">Clear</button>
@@ -476,6 +527,9 @@
     dateLabel: document.getElementById('dateLabel'),
     indicator: document.getElementById('indicator'),
     themeToggle: document.getElementById('themeToggle'),
+    presetSelect: document.getElementById('presetSelect'),
+    savePreset: document.getElementById('savePreset'),
+    deletePreset: document.getElementById('deletePreset'),
   };
 
   els.dateLabel.textContent = new Date().toLocaleDateString('en-US', {
@@ -525,6 +579,7 @@
     schedule[idx] = (schedule[idx] === row) ? null : row;
     refreshGrid();
     previewIdle();
+    saveCurrent();
   }
 
   function refreshGrid() {
@@ -925,10 +980,72 @@
     try { localStorage.setItem('pomodoro-theme', next); } catch (e) {}
   });
 
+  // Preset handlers
+  els.presetSelect.addEventListener('change', () => {
+    const name = els.presetSelect.value;
+    if (!name) {
+      els.deletePreset.disabled = true;
+      return;
+    }
+    if (running) {
+      // Don't disrupt a running session
+      els.presetSelect.value = '';
+      flashStatus('Pause first to load a preset');
+      return;
+    }
+    const presets = loadPresets();
+    const p = presets[name];
+    if (!p) return;
+    schedule = p.schedule.slice();
+    if (p.interval) els.intervalMin.value = p.interval;
+    completedIdx.clear();
+    currentIdx = -1;
+    buildGrid();
+    previewIdle();
+    saveCurrent();
+    els.deletePreset.disabled = false;
+  });
+
+  els.savePreset.addEventListener('click', () => {
+    const name = (prompt('Name for this preset:') || '').trim();
+    if (!name) return;
+    const presets = loadPresets();
+    if (presets[name] && !confirm(`Overwrite "${name}"?`)) return;
+    presets[name] = {
+      schedule: schedule.slice(),
+      interval: parseInt(els.intervalMin.value) || 5,
+    };
+    savePresets(presets);
+    refreshPresetSelect();
+    els.presetSelect.value = name;
+    els.deletePreset.disabled = false;
+  });
+
+  els.deletePreset.addEventListener('click', () => {
+    const name = els.presetSelect.value;
+    if (!name) return;
+    if (!confirm(`Delete preset "${name}"?`)) return;
+    const presets = loadPresets();
+    delete presets[name];
+    savePresets(presets);
+    refreshPresetSelect();
+    els.presetSelect.value = '';
+    els.deletePreset.disabled = true;
+  });
+
+  function flashStatus(msg) {
+    const prev = els.sessionInfo.textContent;
+    els.sessionInfo.textContent = msg;
+    setTimeout(() => {
+      if (els.sessionInfo.textContent === msg) els.sessionInfo.textContent = prev;
+    }, 2000);
+  }
+
   els.intervalMin.addEventListener('change', () => {
     if (running) return;
     refreshGrid();
     previewIdle();
+    saveCurrent();
   });
 
   els.addCol.addEventListener('click', () => {
@@ -936,6 +1053,7 @@
     schedule.push(null);
     buildGrid();
     previewIdle();
+    saveCurrent();
   });
 
   els.removeCol.addEventListener('click', () => {
@@ -945,6 +1063,7 @@
     schedule.pop();
     buildGrid();
     previewIdle();
+    saveCurrent();
   });
 
   els.clearGrid.addEventListener('click', () => {
@@ -953,6 +1072,7 @@
     completedIdx.clear();
     refreshGrid();
     previewIdle();
+    saveCurrent();
   });
 
   document.addEventListener('keydown', (e) => {
@@ -970,22 +1090,71 @@
     }
   }, { once: true });
 
-  // Sensible default schedule
-  // Sensible default schedule: 5 focus + 1 break, repeated
-  schedule[0] = 'focus';
-  schedule[1] = 'focus';
-  schedule[2] = 'focus';
-  schedule[3] = 'focus';
-  schedule[4] = 'focus';
-  schedule[5] = 'break';
-  schedule[6] = 'focus';
-  schedule[7] = 'focus';
-  schedule[8] = 'focus';
-  schedule[9] = 'focus';
-  schedule[10] = 'focus';
-  schedule[11] = 'break';
+  // ---- Persistence ----
+  const STORAGE = {
+    current: 'pomodoro-current',
+    presets: 'pomodoro-presets',
+  };
+
+  function saveCurrent() {
+    try {
+      localStorage.setItem(STORAGE.current, JSON.stringify({
+        schedule,
+        interval: parseInt(els.intervalMin.value) || 5,
+      }));
+    } catch (e) {}
+  }
+
+  function loadCurrent() {
+    try {
+      const raw = localStorage.getItem(STORAGE.current);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!Array.isArray(data.schedule)) return null;
+      return data;
+    } catch (e) { return null; }
+  }
+
+  function loadPresets() {
+    try {
+      const raw = localStorage.getItem(STORAGE.presets);
+      if (!raw) return {};
+      return JSON.parse(raw) || {};
+    } catch (e) { return {}; }
+  }
+
+  function savePresets(presets) {
+    try {
+      localStorage.setItem(STORAGE.presets, JSON.stringify(presets));
+    } catch (e) {}
+  }
+
+  function refreshPresetSelect() {
+    const presets = loadPresets();
+    const names = Object.keys(presets).sort();
+    els.presetSelect.innerHTML = '<option value="">Presets…</option>'
+      + names.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+    els.deletePreset.disabled = names.length === 0;
+  }
+
+  function escapeAttr(s) { return String(s).replace(/"/g, '&quot;'); }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  }
+
+  // ---- Init schedule from storage or default ----
+  const restored = loadCurrent();
+  if (restored) {
+    schedule = restored.schedule.slice();
+    if (restored.interval) els.intervalMin.value = restored.interval;
+  } else {
+    // Default: 5 focus + 1 break, repeated
+    schedule = ['focus','focus','focus','focus','focus','break',
+                'focus','focus','focus','focus','focus','break'];
+  }
 
   buildGrid();
+  refreshPresetSelect();
   reset();
 </script>
 </body>
