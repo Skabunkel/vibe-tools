@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pomodoro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script>
+  // Apply theme before paint to avoid flash
+  (function() {
+    try {
+      var saved = localStorage.getItem('pomodoro-theme');
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var theme = saved || (prefersDark ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    } catch (e) {}
+  })();
+</script>
+<style>
+  :root {
+    --bg: #f5f1e8;
+    --ink: #1a1a1a;
+    --muted: #8a8478;
+    --focus: #c8553d;
+    --focus-soft: #e8b4a8;
+    --break: #5b8a72;
+    --break-soft: #b8d4c2;
+    --line: rgba(26, 26, 26, 0.08);
+    --cell-empty: rgba(26, 26, 26, 0.04);
+    --hover: rgba(26, 26, 26, 0.08);
+    --bg-glow-focus: rgba(200, 85, 61, 0.04);
+    --bg-glow-break: rgba(91, 138, 114, 0.04);
+  }
+
+  [data-theme="dark"] {
+    --bg: #15140f;
+    --ink: #ece6d6;
+    --muted: #7a7468;
+    --focus: #d96a52;
+    --focus-soft: #6b3a30;
+    --break: #7eaa92;
+    --break-soft: #2f4a3d;
+    --line: rgba(236, 230, 214, 0.08);
+    --cell-empty: rgba(236, 230, 214, 0.05);
+    --hover: rgba(236, 230, 214, 0.1);
+    --bg-glow-focus: rgba(217, 106, 82, 0.06);
+    --bg-glow-break: rgba(126, 170, 146, 0.06);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Fraunces', serif;
+    transition: background-color 0.4s ease, color 0.4s ease;
+  }
+
+  body {
+    background-image:
+      radial-gradient(circle at 20% 30%, var(--bg-glow-focus) 0%, transparent 50%),
+      radial-gradient(circle at 80% 70%, var(--bg-glow-break) 0%, transparent 50%);
+    padding: 48px 24px 80px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 880px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 64px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  header .brand { color: var(--ink); font-weight: 400; }
+  header .meta { display: flex; align-items: center; gap: 16px; }
+
+  .theme-toggle {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    border-radius: 0;
+  }
+  .theme-toggle:hover {
+    color: var(--ink);
+    border-color: var(--ink);
+    background: transparent;
+  }
+  .theme-toggle svg { display: block; width: 14px; height: 14px; }
+  .theme-toggle .icon-sun { display: none; }
+  .theme-toggle .icon-moon { display: block; }
+  [data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+  [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+  .display { text-align: center; margin-bottom: 56px; }
+
+  .mode-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+    transition: color 0.4s ease;
+  }
+  .mode-label.focus { color: var(--focus); }
+  .mode-label.break { color: var(--break); }
+
+  .timer {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(96px, 18vw, 168px);
+    font-weight: 300;
+    font-variation-settings: "opsz" 144;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    font-feature-settings: "tnum";
+    margin-bottom: 8px;
+  }
+  .timer .colon {
+    display: inline-block;
+    transform: translateY(-0.08em);
+    color: var(--muted);
+    transition: color 0.4s ease;
+  }
+  .timer.focus .colon { color: var(--focus); }
+  .timer.break .colon { color: var(--break); }
+  .timer.running .colon { animation: blink 1s steps(2, end) infinite; }
+  @keyframes blink { 50% { opacity: 0.25; } }
+
+  .session-info {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 64px;
+  }
+
+  button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    padding: 14px 28px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 0;
+  }
+  button:hover { background: var(--ink); color: var(--bg); }
+  button.primary { background: var(--ink); color: var(--bg); min-width: 140px; }
+  button.primary:hover { background: var(--focus); border-color: var(--focus); }
+  button.ghost { border-color: var(--line); color: var(--muted); padding: 8px 16px; font-size: 11px; }
+  button.ghost:hover { background: transparent; color: var(--ink); border-color: var(--ink); }
+
+  .interval-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+  .interval-row label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .interval-row input {
+    width: 80px;
+    text-align: center;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    font-family: 'Fraunces', serif;
+    font-size: 36px;
+    font-weight: 300;
+    color: var(--ink);
+    padding: 4px 0;
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+  .interval-row input:focus { border-bottom-color: var(--focus); }
+  .interval-row input::-webkit-outer-spin-button,
+  .interval-row input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .interval-row .unit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .schedule {
+    border-top: 1px solid var(--line);
+    padding-top: 40px;
+  }
+  .schedule-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  .schedule-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .schedule-actions { display: flex; gap: 8px; }
+
+  .grid-wrap { overflow-x: auto; padding-bottom: 8px; }
+  .grid-inner { position: relative; }
+  .grid {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 8px;
+    min-width: 100%;
+  }
+
+  /* Active-segment band: covers both rows from the first to last active cell */
+  .indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 100%;
+    pointer-events: none;
+    border: 2px solid var(--ink);
+    background: transparent;
+    opacity: 0;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.25s ease;
+    box-shadow: 0 0 0 4px var(--bg);
+    border-radius: 2px;
+    z-index: 5;
+  }
+  .indicator.visible { opacity: 1; }
+  .indicator.running::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 8px;
+    height: 8px;
+    background: var(--ink);
+    border-radius: 50%;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+    50% { opacity: 0.3; transform: translateX(-50%) scale(0.7); }
+  }
+
+  .row-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    align-self: center;
+    padding-right: 8px;
+  }
+  .row-label.focus { color: var(--focus); }
+  .row-label.break { color: var(--break); }
+
+  .cells {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(44px, 1fr);
+    gap: 4px;
+  }
+
+  .cell {
+    height: 56px;
+    background: var(--cell-empty);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, border 0.15s ease, transform 0.1s ease;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: transparent;
+  }
+  /* Bridge that fills the 4px gap to the next cell when merging */
+  .cell::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -5px;
+    width: 5px;
+    background: transparent;
+    pointer-events: none;
+    transition: background 0.15s ease;
+  }
+  .cell.merge-right.active.focus::after { background: var(--focus); }
+  .cell.merge-right.active.break::after { background: var(--break); }
+  .cell.merge-right.done.focus::after { background: var(--focus-soft); }
+  .cell.merge-right.done.break::after { background: var(--break-soft); }
+
+  /* Hide label on cells that are not the start of a merged block */
+  .cell.merge-left { color: transparent !important; }
+
+  .cell:hover { background: var(--hover); color: var(--muted); }
+  .cell.active.focus { background: var(--focus); color: var(--bg); }
+  .cell.active.break { background: var(--break); color: var(--bg); }
+  .cell.done.focus { background: var(--focus-soft); color: transparent; }
+  .cell.done.break { background: var(--break-soft); color: transparent; }
+  .cell.done:hover { color: var(--muted); }
+  .cell.done.merge-left:hover { color: transparent; }
+
+  .col-numbers {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(44px, 1fr);
+    gap: 4px;
+    margin-top: 8px;
+    margin-left: 88px;
+  }
+  .col-num {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  .summary {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .summary strong { color: var(--ink); font-weight: 400; }
+
+  footer {
+    text-align: center;
+    margin-top: 48px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <span class="brand">Pomodoro</span>
+      <div class="meta">
+        <span id="dateLabel"></span>
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="display">
+      <div class="mode-label" id="modeLabel">Idle</div>
+      <div class="timer" id="timer">
+        <span id="minutes">25</span><span class="colon">:</span><span id="seconds">00</span>
+      </div>
+      <div class="session-info" id="sessionInfo">Build your schedule below</div>
+    </div>
+
+    <div class="controls">
+      <button class="primary" id="startBtn">Start</button>
+      <button id="resetBtn">Reset</button>
+      <button id="skipBtn">Skip</button>
+    </div>
+
+    <div class="interval-row">
+      <label for="intervalMin">Interval</label>
+      <input type="number" id="intervalMin" min="1" max="120" value="5" />
+      <span class="unit">min</span>
+    </div>
+
+    <div class="schedule">
+      <div class="schedule-header">
+        <span class="schedule-title">Schedule</span>
+        <div class="schedule-actions">
+          <button class="ghost" id="addCol">+ Slot</button>
+          <button class="ghost" id="removeCol">− Slot</button>
+          <button class="ghost" id="clearGrid">Clear</button>
+        </div>
+      </div>
+
+      <div class="grid-wrap">
+        <div class="grid-inner">
+          <div class="grid">
+            <div class="row-label focus">Focus</div>
+            <div class="cells" id="focusRow"></div>
+
+            <div class="row-label break">Break</div>
+            <div class="cells" id="breakRow"></div>
+          </div>
+          <div class="indicator" id="indicator" aria-hidden="true"></div>
+        </div>
+        <div class="col-numbers" id="colNumbers"></div>
+      </div>
+
+      <div class="summary">
+        <span><strong id="totalFocus">0</strong> min focus</span>
+        <span><strong id="totalBreak">0</strong> min break</span>
+        <span><strong id="totalAll">0</strong> min total</span>
+      </div>
+    </div>
+
+    <footer>Press space to start or pause · Click a slot to toggle</footer>
+  </div>
+
+<script>
+  const els = {
+    minutes: document.getElementById('minutes'),
+    seconds: document.getElementById('seconds'),
+    timer: document.getElementById('timer'),
+    modeLabel: document.getElementById('modeLabel'),
+    sessionInfo: document.getElementById('sessionInfo'),
+    startBtn: document.getElementById('startBtn'),
+    resetBtn: document.getElementById('resetBtn'),
+    skipBtn: document.getElementById('skipBtn'),
+    intervalMin: document.getElementById('intervalMin'),
+    focusRow: document.getElementById('focusRow'),
+    breakRow: document.getElementById('breakRow'),
+    colNumbers: document.getElementById('colNumbers'),
+    addCol: document.getElementById('addCol'),
+    removeCol: document.getElementById('removeCol'),
+    clearGrid: document.getElementById('clearGrid'),
+    totalFocus: document.getElementById('totalFocus'),
+    totalBreak: document.getElementById('totalBreak'),
+    totalAll: document.getElementById('totalAll'),
+    dateLabel: document.getElementById('dateLabel'),
+    indicator: document.getElementById('indicator'),
+    themeToggle: document.getElementById('themeToggle'),
+  };
+
+  els.dateLabel.textContent = new Date().toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric'
+  }).toUpperCase();
+
+  // schedule[i] = 'focus' | 'break' | null
+  let schedule = new Array(12).fill(null);
+  let intervalSec = 25 * 60;
+  let currentIdx = -1;
+  let remaining = 0;
+  let running = false;
+  let intervalId = null;
+  let completedIdx = new Set();
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function buildGrid() {
+    els.focusRow.innerHTML = '';
+    els.breakRow.innerHTML = '';
+    els.colNumbers.innerHTML = '';
+
+    schedule.forEach((slot, i) => {
+      els.focusRow.appendChild(makeCell('focus', i));
+      els.breakRow.appendChild(makeCell('break', i));
+
+      const num = document.createElement('div');
+      num.className = 'col-num';
+      num.textContent = i + 1;
+      els.colNumbers.appendChild(num);
+    });
+    refreshGrid();
+  }
+
+  function makeCell(row, idx) {
+    const c = document.createElement('div');
+    c.className = 'cell';
+    c.dataset.row = row;
+    c.dataset.idx = idx;
+    c.addEventListener('click', () => toggleCell(row, idx));
+    return c;
+  }
+
+  function toggleCell(row, idx) {
+    if (running && idx === currentIdx) return;
+    if (completedIdx.has(idx)) return;
+    schedule[idx] = (schedule[idx] === row) ? null : row;
+    refreshGrid();
+    previewIdle();
+  }
+
+  function refreshGrid() {
+    const cells = document.querySelectorAll('.cell');
+    const minutes = parseInt(els.intervalMin.value) || 0;
+
+    // For each index, determine: is the previous slot the same type? is the next slot the same type?
+    // And for the start of each block, the block length (in slots).
+    const blockStart = [];      // index -> true if this is the start of a same-type run
+    const blockLength = [];     // index -> length of run starting here (only meaningful at starts)
+    for (let i = 0; i < schedule.length; i++) {
+      if (schedule[i] === null) { blockStart[i] = false; continue; }
+      const prevSame = i > 0 && schedule[i - 1] === schedule[i];
+      blockStart[i] = !prevSame;
+      if (blockStart[i]) {
+        let len = 1;
+        while (i + len < schedule.length && schedule[i + len] === schedule[i]) len++;
+        blockLength[i] = len;
+      }
+    }
+    // Walk back to fill blockLength on later indices we skipped (not strictly needed since we only read at starts)
+
+    cells.forEach(c => {
+      const row = c.dataset.row;
+      const idx = parseInt(c.dataset.idx);
+      c.classList.remove('active', 'focus', 'break', 'current', 'done', 'merge-left', 'merge-right');
+      c.textContent = '';
+
+      const slot = schedule[idx];
+      if (slot !== row) {
+        // not active in this row; show the per-slot minutes faintly on hover only
+        c.dataset.empty = '1';
+        // Set hover text content via a data attribute approach: easier to just set textContent for hover
+        // We rely on CSS hover color; put the text now, hidden by color: transparent
+        c.textContent = `${minutes}m`;
+        return;
+      }
+
+      c.classList.add('active', row);
+      if (completedIdx.has(idx)) c.classList.add('done');
+      if (idx === currentIdx && running) c.classList.add('current');
+
+      // Merge classes
+      const sameAsPrev = idx > 0 && schedule[idx - 1] === slot;
+      const sameAsNext = idx < schedule.length - 1 && schedule[idx + 1] === slot;
+      if (sameAsPrev) c.classList.add('merge-left');
+      if (sameAsNext) c.classList.add('merge-right');
+
+      // Label only on the start of a run, showing combined minutes
+      if (!sameAsPrev) {
+        const len = blockLength[idx] || 1;
+        c.textContent = `${len * minutes}m`;
+      }
+    });
+    updateSummary();
+    updateIndicator();
+  }
+
+  function updateIndicator() {
+    if (!els.indicator) return;
+    if (currentIdx === -1 || schedule[currentIdx] === null) {
+      els.indicator.classList.remove('visible', 'running');
+      return;
+    }
+    const runEnd = endOfRunFrom(currentIdx);   // exclusive
+    const lastIdx = runEnd - 1;
+    const firstCell = els.focusRow.children[currentIdx];
+    const lastCell = els.focusRow.children[lastIdx];
+    const breakCell = els.breakRow.children[currentIdx];
+    if (!firstCell || !lastCell || !breakCell) return;
+
+    const inner = els.indicator.parentElement;
+    const innerBox = inner.getBoundingClientRect();
+    const firstBox = firstCell.getBoundingClientRect();
+    const lastBox = lastCell.getBoundingClientRect();
+    const breakBox = breakCell.getBoundingClientRect();
+
+    const left = firstBox.left - innerBox.left;
+    const right = lastBox.right - innerBox.left;
+    const top = firstBox.top - innerBox.top;
+    const bottom = breakBox.bottom - innerBox.top;
+
+    const wasVisible = els.indicator.classList.contains('visible');
+    if (!wasVisible) {
+      // Place without animating, then fade in
+      els.indicator.style.transition = 'none';
+      els.indicator.style.transform = `translate(${left}px, ${top}px)`;
+      els.indicator.style.width = (right - left) + 'px';
+      els.indicator.style.height = (bottom - top) + 'px';
+      // Force reflow then re-enable transitions
+      void els.indicator.offsetWidth;
+      els.indicator.style.transition = '';
+    } else {
+      els.indicator.style.transform = `translate(${left}px, ${top}px)`;
+      els.indicator.style.width = (right - left) + 'px';
+      els.indicator.style.height = (bottom - top) + 'px';
+    }
+    els.indicator.classList.add('visible');
+    els.indicator.classList.toggle('running', running);
+  }
+
+  function updateSummary() {
+    const minutes = parseInt(els.intervalMin.value) || 0;
+    const focusCount = schedule.filter(s => s === 'focus').length;
+    const breakCount = schedule.filter(s => s === 'break').length;
+    els.totalFocus.textContent = focusCount * minutes;
+    els.totalBreak.textContent = breakCount * minutes;
+    els.totalAll.textContent = (focusCount + breakCount) * minutes;
+  }
+
+  function nextSlotFrom(start) {
+    for (let i = start; i < schedule.length; i++) {
+      if (schedule[i] !== null) return i;
+    }
+    return -1;
+  }
+
+  // Find the end (exclusive) of the run starting at idx — the first index where
+  // the type differs from schedule[idx] (or schedule.length).
+  function endOfRunFrom(idx) {
+    if (idx < 0 || schedule[idx] === null) return idx;
+    const type = schedule[idx];
+    let i = idx + 1;
+    while (i < schedule.length && schedule[i] === type) i++;
+    return i;
+  }
+
+  // Find the next segment start after the current run that ends at `runEnd`.
+  // A segment is a non-empty run of a single type; empty cells between are skipped.
+  function nextSegmentStart(runEnd) {
+    return nextSlotFrom(runEnd);
+  }
+
+  function loadSlot(i) {
+    currentIdx = i;
+    const minutes = parseInt(els.intervalMin.value) || 1;
+    // Count how many consecutive same-type slots make up this segment
+    const runEnd = endOfRunFrom(i);
+    const slotsInSegment = runEnd - i;
+    intervalSec = minutes * 60 * slotsInSegment;
+    remaining = intervalSec;
+    const mode = schedule[i];
+    els.modeLabel.textContent = mode === 'focus' ? 'Focus' : 'Break';
+    els.modeLabel.classList.remove('focus', 'break');
+    els.modeLabel.classList.add(mode);
+    els.timer.classList.remove('focus', 'break');
+    els.timer.classList.add(mode);
+    if (slotsInSegment > 1) {
+      els.sessionInfo.textContent = `Slots ${i + 1}–${runEnd} of ${schedule.length}`;
+    } else {
+      els.sessionInfo.textContent = `Slot ${i + 1} of ${schedule.length}`;
+    }
+    render();
+  }
+
+  function render() {
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    els.minutes.textContent = pad(m);
+    els.seconds.textContent = pad(s);
+    if (currentIdx >= 0 && schedule[currentIdx]) {
+      document.title = `${pad(m)}:${pad(s)} — ${schedule[currentIdx]}`;
+    } else {
+      document.title = 'Pomodoro';
+    }
+    refreshGrid();
+  }
+
+  function start() {
+    if (running) return;
+    // If schedule is fully completed, clear it so we can run again from the top
+    if (currentIdx === -1 && completedIdx.size > 0) {
+      completedIdx.clear();
+    }
+    if (currentIdx === -1) {
+      const first = nextSlotFrom(0);
+      if (first === -1) {
+        flashEmpty();
+        return;
+      }
+      loadSlot(first);
+    }
+    running = true;
+    els.startBtn.textContent = 'Pause';
+    els.timer.classList.add('running');
+    intervalId = setInterval(tick, 1000);
+    refreshGrid();
+  }
+
+  function pause() {
+    running = false;
+    els.startBtn.textContent = 'Start';
+    els.timer.classList.remove('running');
+    clearInterval(intervalId);
+    refreshGrid();
+  }
+
+  function toggle() { running ? pause() : start(); }
+
+  function tick() {
+    remaining--;
+    if (remaining < 0) { finishCurrent(); return; }
+    render();
+  }
+
+  function finishCurrent() {
+    // Mark all slots in the current segment as completed
+    const runEnd = endOfRunFrom(currentIdx);
+    for (let i = currentIdx; i < runEnd; i++) completedIdx.add(i);
+
+    const next = nextSegmentStart(runEnd);
+    if (next === -1) {
+      doneChime();
+      pause();
+      currentIdx = -1;
+      els.modeLabel.textContent = 'Done';
+      els.modeLabel.classList.remove('focus', 'break');
+      els.timer.classList.remove('focus', 'break');
+      els.sessionInfo.textContent = 'Schedule complete';
+      remaining = 0;
+      render();
+      notify('Schedule complete');
+      return;
+    }
+    chime();
+    loadSlot(next);
+    notify(`${schedule[next]} starts now`);
+  }
+
+  // Show the upcoming first-segment time on the timer when no session is running
+  function previewIdle() {
+    if (running || currentIdx !== -1) return;
+    const minutes = parseInt(els.intervalMin.value) || 5;
+    const first = nextSlotFrom(0);
+    if (first === -1) {
+      // empty schedule — show single-interval value
+      remaining = minutes * 60;
+      els.modeLabel.textContent = 'Idle';
+      els.modeLabel.classList.remove('focus', 'break');
+      els.timer.classList.remove('focus', 'break');
+      els.sessionInfo.textContent = 'Build your schedule below';
+    } else {
+      const runEnd = endOfRunFrom(first);
+      const slots = runEnd - first;
+      remaining = minutes * 60 * slots;
+      const mode = schedule[first];
+      els.modeLabel.textContent = mode === 'focus' ? 'Focus' : 'Break';
+      els.modeLabel.classList.remove('focus', 'break');
+      els.modeLabel.classList.add(mode);
+      els.timer.classList.remove('focus', 'break');
+      els.timer.classList.add(mode);
+      if (slots > 1) {
+        els.sessionInfo.textContent = `Slots ${first + 1}–${runEnd} of ${schedule.length} · ready`;
+      } else {
+        els.sessionInfo.textContent = `Slot ${first + 1} of ${schedule.length} · ready`;
+      }
+    }
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    els.minutes.textContent = pad(m);
+    els.seconds.textContent = pad(s);
+    document.title = 'Pomodoro';
+    refreshGrid();
+  }
+
+  function reset() {
+    pause();
+    currentIdx = -1;
+    completedIdx.clear();
+    previewIdle();
+  }
+
+  function skip() {
+    if (currentIdx === -1) return;
+    // Mark all slots in the current run as completed
+    const runEnd = endOfRunFrom(currentIdx);
+    for (let i = currentIdx; i < runEnd; i++) completedIdx.add(i);
+
+    const next = nextSegmentStart(runEnd);
+    if (next === -1) {
+      doneChime();
+      pause();
+      currentIdx = -1;
+      els.modeLabel.textContent = 'Done';
+      els.modeLabel.classList.remove('focus', 'break');
+      els.timer.classList.remove('focus', 'break');
+      els.sessionInfo.textContent = 'Schedule complete';
+      remaining = 0;
+      render();
+      notify('Schedule complete');
+      return;
+    }
+    chime();
+    loadSlot(next);
+    notify(`${schedule[next]} starts now`);
+  }
+
+  function flashEmpty() {
+    els.sessionInfo.textContent = 'Add at least one slot below';
+    setTimeout(() => {
+      if (currentIdx === -1) els.sessionInfo.textContent = 'Build your schedule below';
+    }, 2000);
+  }
+
+  function chime() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const notes = [523.25, 659.25, 783.99];
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const start = ctx.currentTime + i * 0.15;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.15, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.6);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.6);
+      });
+    } catch (e) {}
+  }
+
+  // Longer, more triumphant chime for completing the whole schedule.
+  // C major arpeggio rising up then a held octave resolution with a soft fifth underneath.
+  function doneChime() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const now = ctx.currentTime;
+
+      // Master gain to keep things gentle
+      const master = ctx.createGain();
+      master.gain.value = 0.9;
+      master.connect(ctx.destination);
+
+      // Quick arpeggio: C5, E5, G5, C6
+      const arp = [523.25, 659.25, 783.99, 1046.50];
+      arp.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        const start = now + i * 0.12;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.18, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.5);
+        osc.connect(gain).connect(master);
+        osc.start(start);
+        osc.stop(start + 0.55);
+      });
+
+      // Held resolution chord after the arp: C5 + G5 + C6, longer decay
+      const chordStart = now + arp.length * 0.12 + 0.05;
+      const chord = [523.25, 783.99, 1046.50];
+      chord.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, chordStart);
+        gain.gain.linearRampToValueAtTime(0.13 - i * 0.02, chordStart + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, chordStart + 1.6);
+        osc.connect(gain).connect(master);
+        osc.start(chordStart);
+        osc.stop(chordStart + 1.7);
+      });
+
+      // Soft low fifth (G3) underneath for warmth
+      const bass = ctx.createOscillator();
+      const bassGain = ctx.createGain();
+      bass.type = 'sine';
+      bass.frequency.value = 196.00;
+      bassGain.gain.setValueAtTime(0, chordStart);
+      bassGain.gain.linearRampToValueAtTime(0.08, chordStart + 0.08);
+      bassGain.gain.exponentialRampToValueAtTime(0.001, chordStart + 1.8);
+      bass.connect(bassGain).connect(master);
+      bass.start(chordStart);
+      bass.stop(chordStart + 1.9);
+    } catch (e) {}
+  }
+
+  function notify(text) {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+      new Notification('Pomodoro', { body: text });
+    }
+  }
+
+  els.startBtn.addEventListener('click', toggle);
+  els.resetBtn.addEventListener('click', reset);
+  els.skipBtn.addEventListener('click', skip);
+
+  els.themeToggle.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('pomodoro-theme', next); } catch (e) {}
+  });
+
+  els.intervalMin.addEventListener('change', () => {
+    if (running) return;
+    refreshGrid();
+    previewIdle();
+  });
+
+  els.addCol.addEventListener('click', () => {
+    if (schedule.length >= 32) return;
+    schedule.push(null);
+    buildGrid();
+    previewIdle();
+  });
+
+  els.removeCol.addEventListener('click', () => {
+    if (schedule.length <= 1) return;
+    const lastIdx = schedule.length - 1;
+    if (lastIdx === currentIdx || completedIdx.has(lastIdx)) return;
+    schedule.pop();
+    buildGrid();
+    previewIdle();
+  });
+
+  els.clearGrid.addEventListener('click', () => {
+    if (running) return;
+    schedule = schedule.map(() => null);
+    completedIdx.clear();
+    refreshGrid();
+    previewIdle();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
+      e.preventDefault();
+      toggle();
+    }
+  });
+
+  window.addEventListener('resize', () => updateIndicator());
+
+  document.body.addEventListener('click', () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, { once: true });
+
+  // Sensible default schedule
+  // Sensible default schedule: 5 focus + 1 break, repeated
+  schedule[0] = 'focus';
+  schedule[1] = 'focus';
+  schedule[2] = 'focus';
+  schedule[3] = 'focus';
+  schedule[4] = 'focus';
+  schedule[5] = 'break';
+  schedule[6] = 'focus';
+  schedule[7] = 'focus';
+  schedule[8] = 'focus';
+  schedule[9] = 'focus';
+  schedule[10] = 'focus';
+  schedule[11] = 'break';
+
+  buildGrid();
+  reset();
+</script>
+</body>
+</html>

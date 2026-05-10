@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BaseXplorer</title>
+<style>
+  :root {
+    --bg: #0d0d0f;
+    --surface: #16161a;
+    --surface2: #1e1e24;
+    --border: #2a2a35;
+    --accent: #e8ff47;
+    --accent2: #47ffe8;
+    --text: #e8e8f0;
+    --muted: #6b6b80;
+    --error: #ff4747;
+    --success: #47ff8a;
+    --font-ui: 'DM Mono', monospace;
+  }
+
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    min-height: 100vh;
+    padding: 40px 24px;
+    background-image:
+      radial-gradient(ellipse at 10% 20%, rgba(232,255,71,0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 90% 80%, rgba(71,255,232,0.04) 0%, transparent 50%);
+  }
+
+  header {
+    margin-bottom: 48px;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  header h1 {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 300;
+    letter-spacing: -0.03em;
+    color: var(--text);
+  }
+
+  header h1 span {
+    color: var(--accent);
+  }
+
+  header .subtitle {
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    max-width: 1100px;
+  }
+
+  @media (max-width: 700px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--surface);
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .panel:focus-within::before {
+    opacity: 1;
+  }
+
+  .panel.wide {
+    grid-column: 1 / -1;
+  }
+
+  .panel-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .panel-label .badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    padding: 2px 8px;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    border-radius: 2px;
+  }
+
+  .base-indicator {
+    font-size: 3rem;
+    font-weight: 300;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 4px;
+    letter-spacing: -0.04em;
+    transition: all 0.2s;
+  }
+
+  .base-sub {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    margin-bottom: 20px;
+  }
+
+  textarea, input[type="text"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 14px 16px;
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    line-height: 1.6;
+    border-radius: 0;
+  }
+
+  textarea:focus, input[type="text"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  textarea.mono-display {
+    min-height: 120px;
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+  }
+
+  .charset-input {
+    min-height: 70px;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    word-break: break-all;
+  }
+
+  .char-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 14px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .char-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--accent2);
+    font-size: 0.75rem;
+    padding: 2px 7px;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+
+  .output-area {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 18px 16px;
+    min-height: 120px;
+    font-size: 1rem;
+    letter-spacing: 0.06em;
+    line-height: 1.7;
+    word-break: break-all;
+    color: var(--text);
+    position: relative;
+    white-space: pre-wrap;
+  }
+
+  .output-area.error {
+    color: var(--error);
+    border-color: rgba(255,71,71,0.3);
+  }
+
+  .output-area.success {
+    color: var(--success);
+  }
+
+  .output-placeholder {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-style: italic;
+  }
+
+  .font-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .font-row input {
+    flex: 1;
+    resize: none;
+    min-height: unset;
+  }
+
+  .btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    font-family: inherit;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0 20px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+
+  .btn:hover { background: #f5ff6e; }
+  .btn:active { transform: scale(0.97); }
+
+  .font-status {
+    margin-top: 10px;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    min-height: 1.2em;
+    transition: color 0.3s;
+  }
+
+  .font-status.ok { color: var(--success); }
+  .font-status.err { color: var(--error); }
+
+  .divider {
+    height: 2px;
+    background: var(--border);
+    margin: 0;
+  }
+
+  .stats-row {
+    display: flex;
+    gap: 20px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .stat span {
+    color: var(--accent2);
+    display: block;
+    font-size: 1.1rem;
+    letter-spacing: -0.02em;
+  }
+
+  .direction-toggle {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 20px;
+  }
+
+  .dir-btn {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .dir-btn.active {
+    background: var(--surface);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .corner-label {
+    position: absolute;
+    bottom: 10px;
+    right: 14px;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    color: var(--border);
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+
+  .output-options {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .opt-group {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .opt-label {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-right: none;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .opt-input {
+    width: 56px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 8px 10px;
+    outline: none;
+    text-align: center;
+    transition: border-color 0.2s;
+    resize: none;
+  }
+
+  .opt-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  .opt-input.wide { width: 72px; }
+
+  .group-sep-preview {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: none;
+    color: var(--muted);
+    font-size: 0.65rem;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    letter-spacing: 0.05em;
+    min-width: 28px;
+    font-style: italic;
+  }
+
+  .output-area .group-sep {
+    color: var(--muted);
+    opacity: 0.5;
+    user-select: none;
+  }
+
+  .output-area .pad-char {
+    color: var(--muted);
+    opacity: 0.6;
+  }
+
+  .output-area .check-digit {
+    color: var(--accent2);
+    opacity: 0.9;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-style: dotted;
+  }
+
+  .output-area .group-err {
+    background: rgba(255,71,71,0.15);
+    outline: 1px solid var(--error);
+    color: var(--error);
+  }
+
+  .output-area .group-corrected {
+    background: rgba(71,255,138,0.08);
+    outline: 1px solid var(--success);
+  }
+
+  .output-area .corrected-char {
+    color: var(--success);
+    font-style: italic;
+  }
+
+  .check-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .check-legend span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .legend-swatch {
+    width: 10px; height: 10px;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Base<span>X</span>plorer</h1>
+    <div class="subtitle">arbitrary base encoding · custom fonts</div>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- Charset Panel -->
+  <div class="panel">
+    <div class="panel-label">
+      Charset Definition
+      <span class="badge" id="base-badge">BASE —</span>
+    </div>
+    <div class="base-indicator" id="base-num">—</div>
+    <div class="base-sub">unique characters detected</div>
+    <textarea class="charset-input" id="charset-input" placeholder="Type your character set here…
+e.g. 0123456789ABCDEF for base16
+or 01 for binary (base2)
+Order matters — first char = 0"></textarea>
+    <div class="char-grid" id="char-grid"></div>
+  </div>
+
+  <!-- Font Panel -->
+  <div class="panel">
+    <div class="panel-label">Google Font</div>
+    <div style="margin-bottom:14px; font-size:0.75rem; color:var(--muted); line-height:1.6;">
+      Paste a Google Fonts <code style="color:var(--accent2); background:var(--surface2); padding:1px 5px;">@import</code> or <code style="color:var(--accent2); background:var(--surface2); padding:1px 5px;">&lt;link&gt;</code> tag, or just the font URL.
+    </div>
+    <div class="font-row">
+      <input type="text" id="font-input" placeholder="https://fonts.googleapis.com/css2?family=…" />
+      <button class="btn" onclick="loadFont()">Load</button>
+    </div>
+    <div class="font-status" id="font-status">No custom font loaded</div>
+
+    <div style="margin-top:24px;">
+      <div class="panel-label">Preview</div>
+      <div id="font-preview" style="font-size:1.4rem; line-height:1.5; letter-spacing:0.02em; color:var(--text); padding:12px; background:var(--surface2); border:1px solid var(--border);">
+        The quick brown fox<br>0123456789 AaBbCc
+      </div>
+    </div>
+  </div>
+
+  <div class="divider wide"></div>
+
+  <!-- Encode/Decode Panel -->
+  <div class="panel wide">
+    <div class="direction-toggle">
+      <button class="dir-btn active" id="btn-encode" onclick="setMode('encode')">▲ Encode (text → baseX)</button>
+      <button class="dir-btn" id="btn-decode" onclick="setMode('decode')">▼ Decode (baseX → text)</button>
+    </div>
+
+    <div class="output-options">
+      <div class="opt-group">
+        <span class="opt-label">Pad char</span>
+        <input class="opt-input" id="pad-char" type="text" maxlength="1" placeholder="=" title="Character used for padding (e.g. =). Leave empty for no padding." />
+      </div>
+      <div class="opt-group" style="margin-left:8px;">
+        <span class="opt-label">Group</span>
+        <input class="opt-input wide" id="group-size" type="number" min="0" max="999" placeholder="0" title="Group output into blocks of N chars. 0 = off." />
+        <span class="opt-label" style="border-left:none; border-right:1px solid var(--border);">chars sep by</span>
+        <input class="opt-input" id="group-sep" type="text" maxlength="3" placeholder=" " title="Separator between groups (space, dash, newline…)" style="width:48px;" />
+        <span class="group-sep-preview" id="group-sep-preview">·</span>
+      </div>
+      <div class="opt-group" style="margin-left:8px;">
+        <span class="opt-label">Check digit</span>
+        <select class="opt-input" id="check-mode" style="width:130px; text-align:left; cursor:pointer;" title="Append a check digit to each group">
+          <option value="none">None</option>
+          <option value="check">Check only</option>
+          <option value="ecc">Error correct (1)</option>
+        </select>
+      </div>
+    </div>
+    <div class="check-legend" id="check-legend" style="display:none; margin-bottom:14px;">
+      <span><span class="legend-swatch" style="background:var(--accent2); opacity:0.9; text-decoration:underline;"></span> Check digit</span>
+      <span><span class="legend-swatch" style="background:rgba(71,255,138,0.3); outline:1px solid var(--success);"></span> Corrected</span>
+      <span><span class="legend-swatch" style="background:rgba(255,71,71,0.3); outline:1px solid var(--error);"></span> Invalid</span>
+    </div>
+
+    <div class="panel-label" id="input-label">Input — plain text (UTF-8)</div>
+    <textarea class="mono-display" id="data-input" placeholder="Enter text to encode…"></textarea>
+
+    <div class="stats-row" id="stats-row">
+      <div class="stat">Input bytes <span id="stat-bytes">0</span></div>
+      <div class="stat">Encoded chars <span id="stat-outchars">0</span></div>
+      <div class="stat">+ Check digits <span id="stat-checkchars">—</span></div>
+      <div class="stat">Total output <span id="stat-total">—</span></div>
+      <div class="stat">Overhead <span id="stat-ratio">—</span></div>
+    </div>
+
+    <div style="margin-top:20px;">
+      <div class="panel-label" id="output-label">Output — encoded</div>
+      <div class="output-area" id="output-area">
+        <span class="output-placeholder">Define a charset and enter data above…</span>
+      </div>
+      <div class="corner-label" id="corner-base">base —</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let mode = 'encode'; // 'encode' | 'decode'
+  let currentFontFamily = null;
+
+  // ── Charset ──────────────────────────────────────────────
+  const charsetInput = document.getElementById('charset-input');
+  const baseNum = document.getElementById('base-num');
+  const baseBadge = document.getElementById('base-badge');
+  const charGrid = document.getElementById('char-grid');
+  const cornerBase = document.getElementById('corner-base');
+
+  function getCharset() {
+    const raw = charsetInput.value;
+    const seen = new Set();
+    const chars = [];
+    for (const c of raw) {
+      if (!seen.has(c)) { seen.add(c); chars.push(c); }
+    }
+    return chars;
+  }
+
+  function updateCharset() {
+    const chars = getCharset();
+    const base = chars.length;
+    baseNum.textContent = base > 0 ? base : '—';
+    baseBadge.textContent = base > 1 ? `BASE ${base}` : 'BASE —';
+    cornerBase.textContent = base > 1 ? `base ${base}` : 'base —';
+
+    charGrid.innerHTML = '';
+    chars.forEach(c => {
+      const chip = document.createElement('span');
+      chip.className = 'char-chip';
+      chip.textContent = c === ' ' ? '␣' : c;
+      chip.title = `U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4,'0')}`;
+      charGrid.appendChild(chip);
+    });
+
+    process();
+  }
+
+  charsetInput.addEventListener('input', updateCharset);
+
+  // ── Mode toggle ───────────────────────────────────────────
+  function setMode(m) {
+    mode = m;
+    const enc = document.getElementById('btn-encode');
+    const dec = document.getElementById('btn-decode');
+    const inputLabel = document.getElementById('input-label');
+    const outputLabel = document.getElementById('output-label');
+    const dataInput = document.getElementById('data-input');
+
+    enc.classList.toggle('active', m === 'encode');
+    dec.classList.toggle('active', m === 'decode');
+
+    if (m === 'encode') {
+      inputLabel.textContent = 'Input — plain text (UTF-8)';
+      outputLabel.textContent = 'Output — encoded';
+      dataInput.placeholder = 'Enter text to encode…';
+    } else {
+      const gs = getGroupSize();
+      const cm = getCheckMode();
+      const eccCount = cm === 'ecc' ? 2 : cm === 'check' ? 1 : 0;
+      const total = gs > 0 ? gs + eccCount : 0;
+      inputLabel.textContent = 'Input — baseX encoded string';
+      outputLabel.textContent = 'Output — decoded text';
+      dataInput.placeholder = gs > 0
+        ? `Paste encoded data — groups of ${total} chars separated by separator…`
+        : 'Paste encoded data to decode…';
+    }
+
+    process();
+  }
+
+  // ── Encode / Decode ───────────────────────────────────────
+  function encodeBytes(bytes, charset) {
+    const base = charset.length;
+    if (base < 2) throw new Error('Need at least 2 unique characters');
+    if (bytes.length === 0) return '';
+
+    // Convert byte array to big integer
+    let num = BigInt(0);
+    for (const b of bytes) {
+      num = num * BigInt(256) + BigInt(b);
+    }
+
+    // Count leading zeros
+    let leadingZeros = 0;
+    for (const b of bytes) { if (b === 0) leadingZeros++; else break; }
+
+    let result = '';
+    const bigBase = BigInt(base);
+    if (num === 0n) {
+      result = charset[0];
+    } else {
+      while (num > 0n) {
+        result = charset[Number(num % bigBase)] + result;
+        num = num / bigBase;
+      }
+    }
+
+    return charset[0].repeat(leadingZeros) + result;
+  }
+
+  function decodeToBytes(str, charset) {
+    const base = charset.length;
+    if (base < 2) throw new Error('Need at least 2 unique characters');
+    if (str.length === 0) return new Uint8Array(0);
+
+    const charMap = new Map(charset.map((c, i) => [c, i]));
+
+    // Validate all chars
+    for (const c of str) {
+      if (!charMap.has(c)) throw new Error(`Character '${c}' not in charset`);
+    }
+
+    // Count leading "zero" chars
+    let leadingZeros = 0;
+    for (const c of str) { if (c === charset[0]) leadingZeros++; else break; }
+
+    // Convert to big integer
+    let num = BigInt(0);
+    const bigBase = BigInt(base);
+    for (const c of str) {
+      num = num * bigBase + BigInt(charMap.get(c));
+    }
+
+    // Convert big integer to bytes
+    const bytes = [];
+    while (num > 0n) {
+      bytes.unshift(Number(num & 0xFFn));
+      num >>= 8n;
+    }
+
+    const result = new Uint8Array(leadingZeros + bytes.length);
+    for (let i = 0; i < bytes.length; i++) result[leadingZeros + i] = bytes[i];
+    return result;
+  }
+
+  // ── Output options helpers ────────────────────────────────
+  function getPadChar() {
+    return document.getElementById('pad-char').value;
+  }
+
+  function getGroupSize() {
+    const v = parseInt(document.getElementById('group-size').value, 10);
+    return (isNaN(v) || v <= 0) ? 0 : v;
+  }
+
+  function getGroupSep() {
+    const raw = document.getElementById('group-sep').value;
+    return raw === '\\n' ? '\n' : (raw === '' ? ' ' : raw);
+  }
+
+  function getCheckMode() {
+    return document.getElementById('check-mode').value; // 'none' | 'check' | 'ecc'
+  }
+
+  // ── Check digit algorithms ────────────────────────────────
+  // Simple weighted sum mod base. For ECC we use a second parity digit
+  // that lets us both detect AND correct a single-position error.
+  //
+  // CHECK only: 1 extra char = sum of (value[i] * (i+1)) mod base
+  // ECC (correct 1): 2 extra chars
+  //   c0 = sum of values mod base           (parity)
+  //   c1 = sum of (value[i] * (i+1)) mod base  (weighted parity)
+  //   Together they identify which position is wrong and what the correct value is.
+
+  function checkDigit(groupChars, charset) {
+    const base = charset.length;
+    const charMap = new Map(charset.map((c, i) => [c, i]));
+    let sum = 0;
+    for (let i = 0; i < groupChars.length; i++) {
+      sum = (sum + charMap.get(groupChars[i]) * (i + 1)) % base;
+    }
+    return charset[sum];
+  }
+
+  function eccDigits(groupChars, charset) {
+    const base = charset.length;
+    const charMap = new Map(charset.map((c, i) => [c, i]));
+    let c0 = 0, c1 = 0;
+    for (let i = 0; i < groupChars.length; i++) {
+      const v = charMap.get(groupChars[i]);
+      c0 = (c0 + v) % base;
+      c1 = (c1 + v * (i + 1)) % base;
+    }
+    return [charset[c0], charset[c1]];
+  }
+
+  // Returns { valid, correctedGroup, correctedPos } for check-only
+  function verifyCheck(groupChars, checkChar, charset) {
+    const expected = checkDigit(groupChars, charset);
+    return { valid: expected === checkChar };
+  }
+
+  // Returns { valid, correctedGroup, correctedPos, errorPos }
+  function verifyEcc(groupChars, c0char, c1char, charset) {
+    const base = charset.length;
+    const charMap = new Map(charset.map((c, i) => [c, i]));
+
+    const c0 = charMap.get(c0char);
+    const c1 = charMap.get(c1char);
+
+    // Compute syndromes
+    let s0 = c0, s1 = c1;
+    for (let i = 0; i < groupChars.length; i++) {
+      const v = charMap.get(groupChars[i]);
+      s0 = (s0 - v + base) % base;
+      s1 = (s1 - v * (i + 1) % base + base) % base;
+    }
+
+    if (s0 === 0 && s1 === 0) return { valid: true };
+
+    // s1 / s0 mod base = position (1-indexed) of the error
+    // We need modular inverse of s0
+    function modInverse(a, m) {
+      a = ((a % m) + m) % m;
+      for (let x = 1; x < m; x++) if ((a * x) % m === 1) return x;
+      return -1;
+    }
+
+    const inv = modInverse(s0, base);
+    if (inv === -1) return { valid: false }; // can't correct
+
+    const pos = (s1 * inv) % base; // 1-indexed position
+    if (pos < 1 || pos > groupChars.length) return { valid: false };
+
+    const errIdx = pos - 1;
+    const errVal = charMap.get(groupChars[errIdx]);
+    const corrVal = (errVal - s0 + base) % base;
+
+    const corrected = [...groupChars];
+    corrected[errIdx] = charset[corrVal];
+
+    return { valid: false, corrected: true, correctedGroup: corrected, correctedPos: errIdx };
+  }
+
+  function applyPadding(encoded, padChar, gs) {
+    if (!padChar || !encoded || gs < 1) return encoded;
+    const rem = encoded.length % gs;
+    if (rem === 0) return encoded;
+    return encoded + padChar.repeat(gs - rem);
+  }
+
+  // ── Render with grouping + check digits ───────────────────
+  function renderOutput(raw, out, charset) {
+    const padChar = getPadChar();
+    const gs = getGroupSize();
+    const sep = getGroupSep();
+    const cm = getCheckMode();
+
+    // Show legend if check mode is on
+    const legend = document.getElementById('check-legend');
+    legend.style.display = (cm !== 'none' && gs >= 1) ? 'flex' : 'none';
+
+    if (gs < 1) {
+      // No grouping — just output raw (no check digits without groups)
+      out.textContent = applyPadding(raw, padChar, 0) || raw;
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const eccCount = cm === 'ecc' ? 2 : cm === 'check' ? 1 : 0;
+    // data chars per group (excluding check digits)
+    const dataPerGroup = gs; // user-defined group size = data chars
+    let pos = 0;
+
+    while (pos < raw.length) {
+      const slice = [...raw].slice(pos, pos + dataPerGroup); // array of chars
+      pos += slice.length;
+
+      // Pad slice if it's the last group and padding is on
+      let displaySlice = [...slice];
+      if (padChar && displaySlice.length < dataPerGroup) {
+        while (displaySlice.length < dataPerGroup) displaySlice.push(padChar);
+      }
+
+      const rawLen = slice.length; // actual data chars (no padding)
+
+      // Compute check chars from real data only (not pad)
+      let checkChars = [];
+      if (eccCount > 0 && rawLen > 0) {
+        if (cm === 'check') {
+          checkChars = [checkDigit(slice, charset)];
+        } else {
+          checkChars = eccDigits(slice, charset);
+        }
+      }
+
+      // Wrap entire group in a span
+      const groupSpan = document.createElement('span');
+
+      for (let j = 0; j < displaySlice.length; j++) {
+        const s = document.createElement('span');
+        const isPad = j >= rawLen && padChar && displaySlice[j] === padChar;
+        if (isPad) s.className = 'pad-char';
+        s.textContent = displaySlice[j];
+        groupSpan.appendChild(s);
+      }
+
+      // Append check chars
+      checkChars.forEach(cc => {
+        const s = document.createElement('span');
+        s.className = 'check-digit';
+        s.title = cm === 'ecc' ? 'ECC digit (corrects 1 error)' : 'Check digit';
+        s.textContent = cc;
+        groupSpan.appendChild(s);
+      });
+
+      fragment.appendChild(groupSpan);
+
+      // Separator
+      if (pos < raw.length) {
+        const s = document.createElement('span');
+        s.className = 'group-sep';
+        s.textContent = sep;
+        s.setAttribute('aria-hidden', 'true');
+        fragment.appendChild(s);
+      }
+    }
+
+    out.innerHTML = '';
+    out.appendChild(fragment);
+  }
+
+  // ── Render decode output with verification ────────────────
+  function renderDecodeVerify(groups, out, charset) {
+    const cm = getCheckMode();
+    const sep = getGroupSep();
+    const eccCount = cm === 'ecc' ? 2 : cm === 'check' ? 1 : 0;
+
+    const legend = document.getElementById('check-legend');
+    legend.style.display = (cm !== 'none') ? 'flex' : 'none';
+
+    if (eccCount === 0 || groups.length === 0) {
+      out.textContent = groups.join(sep);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    groups.forEach((group, gi) => {
+      const chars = [...group];
+      if (chars.length <= eccCount) {
+        // Too short to have data + check
+        const s = document.createElement('span');
+        s.textContent = group;
+        fragment.appendChild(s);
+      } else {
+        const dataChars = chars.slice(0, chars.length - eccCount);
+        const checkPart = chars.slice(chars.length - eccCount);
+
+        let result;
+        if (cm === 'check') {
+          result = verifyCheck(dataChars, checkPart[0], charset);
+        } else {
+          result = verifyEcc(dataChars, checkPart[0], checkPart[1], charset);
+        }
+
+        const groupSpan = document.createElement('span');
+
+        if (result.valid) {
+          // Valid group — render normally
+          dataChars.forEach(c => {
+            const s = document.createElement('span'); s.textContent = c; groupSpan.appendChild(s);
+          });
+          checkPart.forEach(c => {
+            const s = document.createElement('span'); s.className = 'check-digit'; s.textContent = c; groupSpan.appendChild(s);
+          });
+        } else if (result.corrected) {
+          groupSpan.className = 'group-corrected';
+          groupSpan.title = `Error corrected at position ${result.correctedPos + 1}`;
+          result.correctedGroup.forEach((c, i) => {
+            const s = document.createElement('span');
+            if (i === result.correctedPos) s.className = 'corrected-char';
+            s.textContent = c;
+            groupSpan.appendChild(s);
+          });
+          checkPart.forEach(c => {
+            const s = document.createElement('span'); s.className = 'check-digit'; s.textContent = c; groupSpan.appendChild(s);
+          });
+        } else {
+          groupSpan.className = 'group-err';
+          groupSpan.title = 'Invalid group — check digit mismatch';
+          chars.forEach(c => {
+            const s = document.createElement('span'); s.textContent = c; groupSpan.appendChild(s);
+          });
+        }
+
+        fragment.appendChild(groupSpan);
+      }
+
+      if (gi < groups.length - 1) {
+        const s = document.createElement('span');
+        s.className = 'group-sep';
+        s.textContent = sep;
+        s.setAttribute('aria-hidden', 'true');
+        fragment.appendChild(s);
+      }
+    });
+
+    out.innerHTML = '';
+    out.appendChild(fragment);
+  }
+
+  // Live-update sep preview
+  function updateSepPreview() {
+    const sep = getGroupSep();
+    const preview = document.getElementById('group-sep-preview');
+    if (sep === ' ') preview.textContent = '·';
+    else if (sep === '\n') preview.textContent = '↵';
+    else if (sep === '\t') preview.textContent = '→';
+    else preview.textContent = sep || '·';
+    process();
+  }
+
+  document.getElementById('group-sep').addEventListener('input', updateSepPreview);
+  document.getElementById('group-size').addEventListener('input', () => { updateDecodeHint(); process(); });
+  document.getElementById('pad-char').addEventListener('input', process);
+  document.getElementById('check-mode').addEventListener('change', () => { updateDecodeHint(); process(); });
+
+  function updateDecodeHint() {
+    if (mode !== 'decode') return;
+    const gs = getGroupSize();
+    const cm = getCheckMode();
+    const eccCount = cm === 'ecc' ? 2 : cm === 'check' ? 1 : 0;
+    const total = gs > 0 ? gs + eccCount : 0;
+    const dataInput = document.getElementById('data-input');
+    dataInput.placeholder = gs > 0
+      ? `Paste encoded data — groups of ${total} chars (${gs} data + ${eccCount} check) separated by separator…`
+      : 'Paste encoded data to decode…';
+  }
+
+  // ── Auto-group decode input ───────────────────────────────
+  // When grouping is configured, automatically split a flat encoded string
+  // into groups on input in decode mode (non-destructive: only if no sep found).
+  function autoGroupDecodeInput(raw) {
+    const gs = getGroupSize();
+    const cm = getCheckMode();
+    const sep = getGroupSep();
+    const eccCount = cm === 'ecc' ? 2 : cm === 'check' ? 1 : 0;
+    const groupTotal = gs + eccCount; // total chars per group including check digits
+
+    if (gs < 1 || groupTotal < 1) return raw;
+    // If the input already contains the separator, leave it alone
+    if (raw.includes(sep)) return raw;
+
+    // Strip any whitespace and try to split into groups of groupTotal
+    const flat = raw.replace(/\s/g, '');
+    if (flat.length === 0) return raw;
+
+    const parts = [];
+    for (let i = 0; i < flat.length; i += groupTotal) {
+      parts.push(flat.slice(i, i + groupTotal));
+    }
+    return parts.join(sep);
+  }
+
+  function setStats(bytes, encodedChars, checkChars) {
+    const total = encodedChars + checkChars;
+    document.getElementById('stat-bytes').textContent = bytes > 0 ? bytes : '0';
+    document.getElementById('stat-outchars').textContent = encodedChars > 0 ? encodedChars : '0';
+    document.getElementById('stat-checkchars').textContent = checkChars > 0 ? '+' + checkChars : '0';
+    document.getElementById('stat-total').textContent = total > 0 ? total : '0';
+    if (bytes > 0 && total > 0) {
+      const overhead = ((total / bytes - 1) * 100).toFixed(1);
+      const ratio = (total / bytes).toFixed(2);
+      document.getElementById('stat-ratio').textContent = `${ratio}× (+${overhead}%)`;
+    } else {
+      document.getElementById('stat-ratio').textContent = '—';
+    }
+  }
+
+  function clearStats() {
+    ['stat-bytes','stat-outchars','stat-checkchars','stat-total','stat-ratio'].forEach(id => {
+      document.getElementById(id).textContent = '—';
+    });
+  }
+
+  function process() {
+    const charset = getCharset();
+    const data = document.getElementById('data-input').value;
+    const out = document.getElementById('output-area');
+
+    if (charset.length < 2) {
+      out.innerHTML = '<span class="output-placeholder">Define a charset with at least 2 unique characters…</span>';
+      out.className = 'output-area';
+      clearStats();
+      document.getElementById('check-legend').style.display = 'none';
+      return;
+    }
+    if (!data) {
+      out.innerHTML = '<span class="output-placeholder">Enter some data above…</span>';
+      out.className = 'output-area';
+      clearStats();
+      document.getElementById('check-legend').style.display = 'none';
+      return;
+    }
+
+    try {
+      if (mode === 'encode') {
+        const bytes = new TextEncoder().encode(data);
+        const encoded = encodeBytes(bytes, charset);
+        out.className = 'output-area success';
+
+        // Count check chars that will be added
+        const gs = getGroupSize();
+        const cm = getCheckMode();
+        const eccCount = cm === 'ecc' ? 2 : cm === 'check' ? 1 : 0;
+        let checkTotal = 0;
+        if (gs >= 1 && eccCount > 0) {
+          const numFullGroups = Math.floor(encoded.length / gs);
+          const lastGroupSize = encoded.length % gs;
+          checkTotal = numFullGroups * eccCount + (lastGroupSize > 0 ? eccCount : 0);
+        }
+
+        renderOutput(encoded, out, charset);
+        setStats(bytes.length, encoded.length, checkTotal);
+
+      } else {
+        // Decode mode
+        const padChar = getPadChar();
+        const sep = getGroupSep();
+        const cm = getCheckMode();
+        const eccCount = cm === 'ecc' ? 2 : cm === 'check' ? 1 : 0;
+
+        // Auto-group flat input if grouping is configured
+        const grouped = autoGroupDecodeInput(data);
+
+        // Split into groups by separator
+        const rawGroups = grouped.split(sep).filter(g => g.length > 0);
+
+        // Strip check digits and pad chars from each group, then decode
+        const stripped = rawGroups.map(g => {
+          let s = g;
+          if (eccCount > 0 && s.length > eccCount) s = s.slice(0, s.length - eccCount);
+          if (padChar) s = s.replace(new RegExp(padChar.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g'), '');
+          return s;
+        });
+
+        const combined = stripped.join('');
+        if (!combined) {
+          out.textContent = '';
+          out.className = 'output-area';
+          clearStats();
+          return;
+        }
+
+        const bytes = decodeToBytes(combined, charset);
+        const decoded = new TextDecoder().decode(bytes);
+
+        // Check digit count in input
+        const checkTotal = rawGroups.reduce((acc, g) => {
+          return acc + (g.length > eccCount ? eccCount : 0);
+        }, 0);
+
+        if (eccCount > 0 && getGroupSize() >= 1) {
+          out.textContent = '';
+          out.className = 'output-area success';
+          renderDecodeVerify(rawGroups, out, charset);
+          const decodedDiv = document.createElement('div');
+          decodedDiv.style.cssText = 'margin-top:12px; padding-top:12px; border-top:1px solid var(--border); color:var(--text); font-size:0.85rem;';
+          decodedDiv.textContent = decoded;
+          out.appendChild(decodedDiv);
+        } else {
+          out.textContent = decoded;
+          out.className = 'output-area success';
+        }
+
+        setStats(bytes.length, combined.length, checkTotal);
+      }
+    } catch (e) {
+      out.textContent = '⚠ ' + e.message;
+      out.className = 'output-area error';
+      document.getElementById('check-legend').style.display = 'none';
+      clearStats();
+    }
+  }
+
+  document.getElementById('data-input').addEventListener('input', process);
+
+  // ── Font Loading ──────────────────────────────────────────
+  function extractFontUrl(raw) {
+    raw = raw.trim();
+    // @import url('...')
+    let m = raw.match(/@import\s+url\(['"]?([^'")\s]+)['"]?\)/i);
+    if (m) return m[1];
+    // <link href="...">
+    m = raw.match(/href=['"]([^'"]+)['"]/i);
+    if (m) return m[1];
+    // bare URL
+    if (raw.startsWith('http')) return raw;
+    return null;
+  }
+
+  function extractFontFamilies(cssText) {
+    const families = [];
+    const re = /font-family:\s*['"]?([^;'"]+)['"]?/gi;
+    let m;
+    while ((m = re.exec(cssText)) !== null) {
+      const name = m[1].trim();
+      if (!families.includes(name)) families.push(name);
+    }
+    return families;
+  }
+
+  async function loadFont() {
+    const raw = document.getElementById('font-input').value;
+    const status = document.getElementById('font-status');
+    const preview = document.getElementById('font-preview');
+
+    const url = extractFontUrl(raw);
+    if (!url) {
+      status.textContent = '✗ Could not parse a URL from the input';
+      status.className = 'font-status err';
+      return;
+    }
+
+    status.textContent = 'Loading…';
+    status.className = 'font-status';
+
+    try {
+      // Remove old font link if any
+      const old = document.getElementById('custom-font-link');
+      if (old) old.remove();
+
+      const link = document.createElement('link');
+      link.id = 'custom-font-link';
+      link.rel = 'stylesheet';
+      link.href = url;
+      document.head.appendChild(link);
+
+      // Fetch CSS to extract family names
+      const resp = await fetch(url);
+      const css = await resp.text();
+      const families = extractFontFamilies(css);
+
+      if (families.length === 0) {
+        throw new Error('No font-family found in stylesheet');
+      }
+
+      currentFontFamily = families[0];
+      applyFont(currentFontFamily);
+
+      status.textContent = `✓ Loaded: ${families.join(', ')}`;
+      status.className = 'font-status ok';
+      preview.style.fontFamily = `'${currentFontFamily}', monospace`;
+
+    } catch (e) {
+      // Try injecting anyway if link loaded
+      if (currentFontFamily) applyFont(currentFontFamily);
+      status.textContent = '⚠ ' + (e.message || 'Load error — font may still work if injected');
+      status.className = 'font-status err';
+    }
+  }
+
+  function applyFont(family) {
+    const stack = `'${family}', monospace`;
+    document.documentElement.style.setProperty('--font-ui', stack);
+    // Force all inputs/textareas to use it too
+    const style = document.getElementById('font-override-style') || document.createElement('style');
+    style.id = 'font-override-style';
+    style.textContent = `
+      body, textarea, input, .output-area, .char-chip {
+        font-family: '${family}', monospace !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Allow Enter key on font input
+  document.getElementById('font-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadFont();
+  });
+
+  // ── Preload a tasteful default charset ────────────────────
+  charsetInput.value = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/';
+  updateCharset();
+</script>
+</body>
+</html>
